@@ -15,21 +15,23 @@
     html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif; }
     .banner {
       position: fixed; left: 50%; top: -220px; transform: translateX(-50%);
-      width: min(520px, calc(100vw - 96px));
+      width: min(560px, calc(100vw - 96px));
       color: var(--text);
       background: linear-gradient(180deg, var(--bg), var(--bg2));
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 16px 48px rgba(0,0,0,0.65);
-      border-radius: 14px; backdrop-filter: blur(10px) saturate(125%);
-      padding: 18px 22px 22px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 18px 56px rgba(0,0,0,0.66);
+      border-radius: 16px; backdrop-filter: blur(10px) saturate(130%);
+      padding: 20px 24px 22px; display: grid; grid-template-columns: 1fr; gap: 12px; align-items: center; justify-items: center; text-align: center;
       transition: transform 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
       opacity: 0;
     }
     .banner.show { top: 28px; opacity: 1; }
-    .pulse { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(255,59,59,0.8); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,59,59,0.8); } 70% { box-shadow: 0 0 0 16px rgba(255,59,59,0); } 100% { box-shadow: 0 0 0 0 rgba(255,59,59,0); } }
+    .icon { position: relative; width: 28px; height: 28px; display: grid; place-items: center; color: var(--accent); }
+    .icon::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; box-shadow: 0 0 0 0 rgba(255,59,59,0.65); animation: glow 1.6s infinite; }
+    .icon svg { width: 28px; height: 28px; display: block; filter: drop-shadow(0 4px 10px rgba(255,59,59,0.35)); }
+    @keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(255,59,59,0.65); } 70% { box-shadow: 0 0 0 16px rgba(255,59,59,0); } 100% { box-shadow: 0 0 0 0 rgba(255,59,59,0); } }
     .content { display: grid; gap: 4px; place-items: center; text-align: center; }
-    .title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; }
+    .title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; text-shadow: 0 1px 0 rgba(0,0,0,0.25); }
     .meta { font-size: 16px; color: var(--muted); }
     .small { font-size: 12px; color: var(--muted); }
     #dbg { position: fixed; right: 10px; bottom: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.45); color: #fff; font: 12px system-ui; display: none; }
@@ -116,22 +118,21 @@
       } catch {}
     }
 
-    function primeAudio(showUnlock = true) {
+    function primeAudio() {
       try {
         if (audioCfg.url && audioCfg.resolved) {
           const a = new Audio(audioCfg.url);
           a.preload = 'auto'; a.volume = audioCfg.vol;
           a.addEventListener('loadedmetadata', () => { if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration; }, { once: true });
           window.__alertProto = a;
+          // attempt silent prime first to avoid autoplay blocks
           a.muted = true;
-          const p = a.play(); if (p && p.then) p.then(() => { a.pause(); hideUnlock(); }).catch(() => { if (showUnlock) showUnlockBtn(); });
+          const p = a.play(); if (p && p.then) p.then(() => { a.pause(); a.muted = false; }).catch(() => {});
         } else {
-          ensureCtx(); if (audioCfg.ctx && audioCfg.ctx.state === 'running') hideUnlock(); else if (showUnlock) showUnlockBtn();
+          ensureCtx();
         }
       } catch {}
     }
-    function showUnlockBtn(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='inline-flex'; }
-    function hideUnlock(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }
 
     function playOnceAt(delayMs){ try { if (!audioCfg.enabled || !audioCfg.url) return; const src=(window.__alertProto&&window.__alertProto.src)||audioCfg.url; setTimeout(()=>{ try{ const a=new Audio(src); a.volume=audioCfg.vol; a.play().catch(()=>{});}catch{} }, Math.max(0,delayMs)); } catch {} }
 
@@ -174,7 +175,7 @@
       if (accent) document.documentElement.style.setProperty('--accent', accent);
       const el=document.getElementById('banner');
       el.querySelector('.title').textContent = displayTitle || title || 'Deprem Ağı Uyarısı';
-      const meta = displayMeta || [message, location].filter(Boolean).join(' · ');
+      const meta = displayMeta || [message, location].filter(Boolean).join(' • ');
       el.querySelector('.meta').textContent = meta || '';
       try { const d = timestamp ? new Date(timestamp) : new Date(); const tr = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).format(d); el.querySelector('.small').textContent = tr; } catch { el.querySelector('.small').textContent=''; }
       playPattern();
@@ -190,19 +191,22 @@
 
     function dbg(msg){ if(qs('debug','0')==='1'){ const d=document.getElementById('dbg'); if(d){ d.style.display='block'; d.textContent=msg; } } }
     window.addEventListener('DOMContentLoaded', ()=>{ const tried=startSSE(); setTimeout(()=>{ if(!usingSSE) poll(); }, 700); resolveSoundUrl().then(()=>{ primeAudio(); }); });
-    window.addEventListener('pointerdown', ()=> primeAudio(false));
   </script>
 </head>
 <body>
   <div id="banner" class="banner" role="status" aria-live="polite">
-    <div class="pulse" aria-hidden="true"></div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+        <path d="M12 2c.4 0 .77.21.98.56l9.02 15.23c.2.34.2.76 0 1.1-.21.35-.58.56-.98.56H3c-.4 0-.77-.21-.98-.56a1.2 1.2 0 0 1 0-1.1L11.04 2.56c.21-.35.58-.56.96-.56Zm0 5c.55 0 1 .45 1 1v6a1 1 0 0 1-2 0V8c0-.55.45-1 1-1Zm0 12.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/>
+      </svg>
+    </div>
     <div class="content">
       <div class="title">Erken Uyarı</div>
       <div class="meta">Deprem Ağı uyarısı</div>
       <div class="small"></div>
     </div>
   </div>
-  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:rgba(0,0,0,0.92); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(function(){ try{ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }catch{}; primeAudio(false); })()">Sesi Etkinleştir</button>
   <div id="dbg"></div>
 </body>
 </html>
+
