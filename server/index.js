@@ -34,6 +34,16 @@ app.get(['/','/overlay'], (req, res) => {
   res.sendFile(process.cwd() + '/public/overlay.html');
 });
 
+// Static alert sound for local dev
+app.get('/alert.mp3', (req, res) => {
+  try {
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.sendFile(process.cwd() + '/alert.mp3');
+  } catch (e) {
+    res.status(404).end();
+  }
+});
+
 // SSE event stream for a given channel
 app.get('/events', (req, res) => {
   const channel = (req.query.channel || 'default').toString();
@@ -133,4 +143,3 @@ app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server running on http://localhost:${PORT}`);
 });
-

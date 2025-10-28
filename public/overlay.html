@@ -19,7 +19,7 @@
     }
     .banner {
       position: fixed; left: 50%; top: -220px; transform: translate(-50%, 0);
-      width: auto; max-width: 520px;
+      width: min(520px, calc(100vw - 72px));
       color: var(--text);
       background: linear-gradient(180deg, var(--bg), var(--bg2));
       border: 1px solid var(--accent-soft);
@@ -27,11 +27,11 @@
       outline-offset: -1px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent);
       border-radius: 14px; backdrop-filter: blur(8px) saturate(130%);
-      padding: 14px 16px; display: grid; grid-template-columns: 1fr; gap: 8px; align-items: center; justify-items: center; text-align: center;
+      padding: 16px 18px 20px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
       transition: transform 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
       opacity: 0;
     }
-    .banner.show { top: 24px; opacity: 1; }
+    .banner.show { top: 28px; opacity: 1; }
     .icon {
       width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto;
       border-radius: 10px; background: radial-gradient(80% 80% at 50% 50%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%);
@@ -56,6 +56,8 @@
       enabled: qs('mute', '0') !== '1' && qs('sound', '1') !== '0',
       volume: Math.max(0, Math.min(1, parseFloat(qs('vol', '1')) || 1)),
       lastPlay: 0,
+      url: null,
+      buffer: null,
     };
 
     async function ensureAudio() {
@@ -67,9 +69,26 @@
         if (audioState.ctx.state === 'suspended') {
           await audioState.ctx.resume();
         }
+        if (!audioState.url) {
+          // Prefer static in public if present, otherwise API fallback
+          audioState.url = qs('soundUrl', '/alert.mp3');
+        }
+        if (!audioState.buffer) {
+          try { await loadAlertBuffer(audioState.url); }
+          catch { try { await loadAlertBuffer('/api/alert'); } catch {} }
+        }
         const el = document.getElementById('soundUnlock');
         if (el && audioState.ctx.state === 'running') el.style.display = 'none';
       } catch {}
+    }
+
+    async function loadAlertBuffer(url) {
+      const r = await fetch(url, { cache: 'force-cache' });
+      if (!r.ok) throw new Error('fetch_failed');
+      const arr = await r.arrayBuffer();
+      const buf = await audioState.ctx.decodeAudioData(arr.slice(0));
+      audioState.buffer = buf;
+      audioState.url = url;
     }
 
     function tone(ctx, when, duration, freqStart, freqEnd, type='sine') {
@@ -87,6 +106,28 @@
       osc.stop(when + duration + 0.03);
     }
 
+    function playBufferPattern(ctx, base) {
+      const d = (audioState.buffer?.duration || 0.4);
+      function playAt(t) {
+        const src = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        src.buffer = audioState.buffer;
+        gain.gain.value = Math.max(0.001, audioState.volume);
+        src.connect(gain).connect(ctx.destination);
+        src.start(t);
+      }
+      // 3 plays back-to-back
+      playAt(base + 0*d);
+      playAt(base + 1*d);
+      playAt(base + 2*d);
+      // pause 0.5s then 3 plays again
+      const base2 = base + 3*d + 0.5;
+      playAt(base2 + 0*d);
+      playAt(base2 + 1*d);
+      playAt(base2 + 2*d);
+      audioState.lastPlay = base2 + 3*d;
+    }
+
     async function playWarningSound() {
       if (!audioState.enabled) return;
       try {
@@ -97,12 +138,17 @@
           if (btn) btn.style.display = 'inline-flex';
           return;
         }
-        const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.05);
-        // New alert tone: clear triple-chirp descending
-        tone(ctx, now + 0.00, 0.16, 920, 860, 'sine');
-        tone(ctx, now + 0.22, 0.16, 820, 760, 'sine');
-        tone(ctx, now + 0.44, 0.22, 720, 640, 'sine');
-        audioState.lastPlay = now + 0.66;
+        // If buffer is ready, use it; else use a simple tone fallback
+        const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.02);
+        if (audioState.buffer) {
+          playBufferPattern(ctx, now);
+        } else {
+          // fallback: brief triple chirp
+          tone(ctx, now + 0.00, 0.16, 920, 860, 'sine');
+          tone(ctx, now + 0.22, 0.16, 820, 760, 'sine');
+          tone(ctx, now + 0.44, 0.22, 720, 640, 'sine');
+          audioState.lastPlay = now + 0.70;
+        }
 
       } catch {}
     }
