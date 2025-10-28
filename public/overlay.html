@@ -19,7 +19,7 @@
     }
     .banner {
       position: fixed; left: 50%; top: -220px; transform: translate(-50%, 0);
-      min-width: 36vw; max-width: 560px;
+      width: auto; max-width: 520px;
       color: var(--text);
       background: linear-gradient(180deg, var(--bg), var(--bg2));
       border: 1px solid var(--accent-soft);
@@ -27,7 +27,7 @@
       outline-offset: -1px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent);
       border-radius: 14px; backdrop-filter: blur(8px) saturate(130%);
-      padding: 16px 18px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
+      padding: 14px 16px; display: grid; grid-template-columns: 1fr; gap: 8px; align-items: center; justify-items: center; text-align: center;
       transition: transform 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
       opacity: 0;
     }
@@ -54,7 +54,8 @@
     const audioState = {
       ctx: null,
       enabled: qs('mute', '0') !== '1' && qs('sound', '1') !== '0',
-      volume: Math.max(0, Math.min(1, parseFloat(qs('vol', '0.9')) || 0.9)),
+      volume: Math.max(0, Math.min(1, parseFloat(qs('vol', '1')) || 1)),
+      lastPlay: 0,
     };
 
     async function ensureAudio() {
@@ -71,6 +72,21 @@
       } catch {}
     }
 
+    function tone(ctx, when, duration, freqStart, freqEnd, type='sine') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freqStart, when);
+      if (freqEnd && freqEnd !== freqStart) osc.frequency.linearRampToValueAtTime(freqEnd, when + duration);
+      const v = Math.max(0.001, audioState.volume);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(v, when + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, when + duration);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(when);
+      osc.stop(when + duration + 0.03);
+    }
+
     async function playWarningSound() {
       if (!audioState.enabled) return;
       try {
@@ -81,23 +97,12 @@
           if (btn) btn.style.display = 'inline-flex';
           return;
         }
-        const now = ctx.currentTime;
-
-        function beep(time, duration, freq) {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, time);
-          gain.gain.setValueAtTime(0.0001, time);
-          gain.gain.exponentialRampToValueAtTime(audioState.volume, time + 0.01);
-          gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-          osc.connect(gain).connect(ctx.destination);
-          osc.start(time);
-          osc.stop(time + duration + 0.02);
-        }
-
-        beep(now + 0.00, 0.18, 740);
-        beep(now + 0.24, 0.22, 622);
+        const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.05);
+        // New alert tone: clear triple-chirp descending
+        tone(ctx, now + 0.00, 0.16, 920, 860, 'sine');
+        tone(ctx, now + 0.22, 0.16, 820, 760, 'sine');
+        tone(ctx, now + 0.44, 0.22, 720, 640, 'sine');
+        audioState.lastPlay = now + 0.66;
 
       } catch {}
     }
@@ -111,7 +116,17 @@
       el.querySelector('.title').textContent = displayTitle || title || 'Earthquake Early Warning';
       const meta = displayMeta || [message, location].filter(Boolean).join(' · ');
       el.querySelector('.meta').textContent = meta || '';
-      el.querySelector('.small').textContent = timestamp ? new Date(timestamp).toLocaleString() : '';
+      // Format time in Turkey regardless of viewer location
+      try {
+        const d = timestamp ? new Date(timestamp) : new Date();
+        const tr = new Intl.DateTimeFormat('tr-TR', {
+          timeZone: 'Europe/Istanbul', year: '2-digit', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        }).format(d);
+        el.querySelector('.small').textContent = tr;
+      } catch {
+        el.querySelector('.small').textContent = '';
+      }
       playWarningSound();
       el.classList.add('show');
       clearTimeout(window.__hideTimer);
