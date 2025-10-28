@@ -115,13 +115,50 @@
     }
 
     function chimeAt(delayMs) {
-      try {
-        ensureCtx();
-        const ctx = audioCfg.ctx;
-        if (!ctx || !audioCfg.enabled) return;
-        const base = ctx.currentTime + (delayMs / 1000);
-        const master = ctx.createGain(); master.gain.value = audioCfg.vol; master.connect(ctx.destination);
-        const notes = [ { f: 880, len: 0.18 }, { f: 1320, len: 0.14 } ];
+  try {
+    ensureCtx();
+    const ctx = audioCfg.ctx;
+    if (!ctx || !audioCfg.enabled) return;
+    const t0 = ctx.currentTime + (delayMs / 1000);
+
+    const out = ctx.createGain();
+    out.gain.value = 1;
+    out.connect(ctx.destination);
+
+    const mix = ctx.createGain();
+    mix.gain.value = Math.max(0.001, audioCfg.vol);
+    mix.connect(out);
+
+    const delay = ctx.createDelay(1.0);
+    delay.delayTime.value = 0.14;
+    const fb = ctx.createGain(); fb.gain.value = 0.22;
+    const dmix = ctx.createGain(); dmix.gain.value = 0.25;
+    delay.connect(fb).connect(delay);
+    delay.connect(dmix).connect(mix);
+
+    function voice(freq, det = 0) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t0);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      if (det) osc.detune.setValueAtTime(det, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.001, audioCfg.vol * 0.9), t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+      osc.connect(g).connect(lp);
+      lp.connect(mix);
+      lp.connect(delay);
+      osc.start(t0);
+      osc.stop(t0 + 0.4);
+    }
+
+    voice(660, 0);
+    voice(660, +4);
+    voice(990, 0);
+  } catch {}
+}, { f: 1320, len: 0.14 } ];
         notes.forEach((n) => {
           const osc = ctx.createOscillator(); const g = ctx.createGain(); const lp = ctx.createBiquadFilter();
           lp.type = 'lowpass'; lp.frequency.setValueAtTime(2400, base);
