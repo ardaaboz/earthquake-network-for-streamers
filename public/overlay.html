@@ -58,8 +58,7 @@
       lastPlay: 0,
       url: null,
       buffer: null,
-      htmlDuration: 0,
-    };
+      ;
 
     async function ensureAudio() {
       try {
@@ -72,11 +71,11 @@
         }
         if (!audioState.url) {
           // Prefer API route for consistent serving on Vercel; local dev also works
-          audioState.url = qs('soundUrl', '/api/alert');
+          audioState.url = qs('soundUrl', '/alert.mp3');
         }
-        if (!audioState.buffer) {
-          try { await loadAlertBuffer(audioState.url); }
-          catch { try { await loadAlertBuffer('/alert.mp3'); } catch {} }
+        
+        if (!audioState.buffer) audioState.mp3Failed = true;
+          catch { try { await loadAlertBuffer('/api/alert'); } catch {} }
         }
         // Prime HTMLAudio metadata for duration
         const elAudio = document.getElementById('alertEl');
@@ -133,7 +132,7 @@
     }
 
     function playHtmlAudioPattern(base = performance.now()/1000) {
-      const src = audioState.url || '/api/alert';
+      const src = audioState.url || '/alert.mp3';
       const d = audioState.htmlDuration || audioState.buffer?.duration || 0.4;
       function playAt(delaySec) {
         const a = new Audio(src);
@@ -165,11 +164,13 @@
         }
         // If buffer is ready, use it; else use a simple tone fallback
         const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.02);
-        // Try HTMLAudio pattern first for environments where WebAudio may be paused/inactive
-        try { playHtmlAudioPattern(); } catch {}
-        if (audioState.buffer) playBufferPattern(ctx, now);
-        else {
-          // Tone fallback if both mp3 paths failed
+        // Prefer mp3: buffer -> WebAudio; else try HTMLAudio; only tone fallback if mp3 failed
+        if (audioState.buffer) {
+          playBufferPattern(ctx, now);
+        } else if (!audioState.mp3Failed) {
+          try { playHtmlAudioPattern(); } catch {}
+        } else {
+          // Tone fallback only when mp3 unavailable
           tone(ctx, now + 0.00, 0.18, 880, 820, 'sine');
           tone(ctx, now + 0.22, 0.18, 780, 720, 'sine');
           tone(ctx, now + 0.44, 0.22, 680, 620, 'sine');
@@ -186,7 +187,7 @@
         document.documentElement.style.setProperty('--accent', accent);
       }
       el.querySelector('.title').textContent = displayTitle || title || 'Earthquake Early Warning';
-      const meta = displayMeta || [message, location].filter(Boolean).join(' Â· ');
+      const meta = displayMeta || [message, location].filter(Boolean).join(' · ');
       el.querySelector('.meta').textContent = meta || '';
       // Format time in Turkey regardless of viewer location
       try {

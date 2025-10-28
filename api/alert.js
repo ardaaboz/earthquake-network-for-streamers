@@ -7,7 +7,7 @@ export default async function handler(req, res) {
       res.setHeader('Allow', 'GET');
       return res.status(405).end();
     }
-    const filePath = path.join(process.cwd(), 'alert.mp3');
+    const filePath = path.join(process.cwd(), 'public', 'alert.mp3');
     // Small cache for static asset
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -18,4 +18,3 @@ export default async function handler(req, res) {
     res.status(404).end();
   }
 }
-

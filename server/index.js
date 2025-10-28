@@ -38,7 +38,7 @@ app.get(['/','/overlay'], (req, res) => {
 app.get('/alert.mp3', (req, res) => {
   try {
     res.setHeader('Content-Type', 'audio/mpeg');
-    res.sendFile(process.cwd() + '/alert.mp3');
+    res.sendFile(process.cwd() + '/public/alert.mp3');
   } catch (e) {
     res.status(404).end();
   }
