@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "rewrites": [
     { "source": "/ap/(.*)", "destination": "/api/$1" },
-    { "source": "/overlay", "destination": "/public/overlay2.html" },
-    { "source": "/overlay/(.*)", "destination": "/public/overlay2.html" }
+    { "source": "/overlay", "destination": "/public/overlay.html" },
+    { "source": "/overlay/(.*)", "destination": "/public/overlay.html" }
   ]
 }

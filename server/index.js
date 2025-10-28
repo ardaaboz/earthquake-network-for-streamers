@@ -31,17 +31,7 @@ app.use('/static', express.static('public', { extensions: ['html'] }));
 
 // Overlay page (for OBS Browser Source)
 app.get(['/','/overlay'], (req, res) => {
-  res.sendFile(process.cwd() + '/public/overlay2.html');
-});
-
-// Static alert sound for local dev
-app.get('/alert.mp3', (req, res) => {
-  try {
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.sendFile(process.cwd() + '/public/alert.mp3');
-  } catch (e) {
-    res.status(404).end();
-  }
+  res.sendFile(process.cwd() + '/public/overlay.html');
 });
 
 // SSE event stream for a given channel
@@ -143,3 +133,4 @@ app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
