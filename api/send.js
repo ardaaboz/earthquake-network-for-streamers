@@ -18,6 +18,7 @@ export default async function handler(req, res) {
     }
     const payload = {
       type: 'earthquake_alert',
+      id: Date.now().toString(),
       title: 'Erken Uyarı',
       message: String(msg),
       location: String(loc),
@@ -25,11 +26,10 @@ export default async function handler(req, res) {
       source: 'manual',
       channel: String(channel),
     };
-    await redis.set(`ch:${channel}`, payload, { ex: 120 });
+    await redis.set(`ch:${channel}`, payload, { ex: 300 });
     return res.json({ ok: true, payload });
   } catch (e) {
     console.error('send error', e);
     return res.status(500).json({ ok: false, error: 'server_error' });
   }
 }
-

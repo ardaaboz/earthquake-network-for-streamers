@@ -11,6 +11,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'method_not_allowed' });
   }
   try {
+    // Disable any CDN/browser caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const channel = (req.query.channel || 'default').toString();
     const since = (req.query.since || '').toString();
     const key = `ch:${channel}`;
@@ -18,7 +23,8 @@ export default async function handler(req, res) {
     if (!payload) {
       return res.json({ ok: true, update: false });
     }
-    if (since && payload.timestamp && since === payload.timestamp) {
+    const currentId = payload.id || payload.timestamp || '';
+    if (since && currentId && since === currentId) {
       return res.json({ ok: true, update: false });
     }
     return res.json({ ok: true, update: true, payload });
@@ -27,4 +33,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'server_error' });
   }
 }
-

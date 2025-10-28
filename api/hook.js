@@ -19,6 +19,7 @@ export default async function handler(req, res) {
 
     const payload = {
       type: 'earthquake_alert',
+      id: Date.now().toString(),
       title: title || 'Deprem Ağı Uyarısı',
       message: message || (raw && String(raw)) || '',
       location: location || '',
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
 
     const key = `ch:${channel}`;
     // Store latest payload with short TTL so polling clients can fetch it.
-    await redis.set(key, payload, { ex: 120 });
+    await redis.set(key, payload, { ex: 300 });
 
     return res.json({ ok: true });
   } catch (e) {
@@ -37,4 +38,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'server_error' });
   }
 }
-
