@@ -39,8 +39,15 @@
     const channel = qs('channel', 'default');
     let lastId = '';
 
-    // Optional alert sound (defaults to /alert.mp3)
-    const audioCfg = {\n      enabled: qs('mute','0') !== '1' && qs('sound','1') !== '0',\n      url: qs('soundUrl','/alert.mp3'),\n      vol: Math.max(0, Math.min(1, parseFloat(qs('vol','1')) || 1)),\n      dur: 0.35,\n      resolved: false,\n      ctx: null,\n    };
+    // Sound: resolve file if provided or fallback to built-in chime
+    const audioCfg = {
+      enabled: qs('mute','0') !== '1' && qs('sound','1') !== '0',
+      url: qs('soundUrl','/alert.mp3'),
+      vol: Math.max(0, Math.min(1, parseFloat(qs('vol','1')) || 1)),
+      dur: 0.35,
+      resolved: false,
+      ctx: null,
+    };
 
     async function resolveSoundUrl() {
       try {
@@ -62,9 +69,91 @@
         }
       } catch {}
     }
-    function ensureCtx(){ try { if (!audioCfg.ctx) { const AC = window.AudioContext||window.webkitAudioContext; if (AC) audioCfg.ctx = new AC(); } if (audioCfg.ctx && audioCfg.ctx.state==='suspended') audioCfg.ctx.resume(); } catch {} }\n    function primeAudio(showUnlock=true) {\n      try {\n        if (audioCfg.url && audioCfg.resolved) {\n          const a = new Audio(audioCfg.url); a.preload='auto'; a.volume = audioCfg.vol; window.__alertProto = a;\n          a.muted = true; const p=a.play(); if (p&&p.then) p.then(()=>{ a.pause(); hideUnlock(); }).catch(()=>{ if(showUnlock) showUnlockBtn();});\n        } else {\n          ensureCtx();\n          if (audioCfg.ctx && audioCfg.ctx.state==='running') hideUnlock(); else if (showUnlock) showUnlockBtn();\n        }\n      } catch {}\n    }\n    function showUnlockBtn(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='inline-flex'; }
-    function hideUnlock(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }
-    function playOnceAt(delayMs){ try { if (!audioCfg.enabled || !audioCfg.url) return; const src=(window.__alertProto&&window.__alertProto.src)||audioCfg.url; setTimeout(()=>{ try{ const a=new Audio(src); a.volume=audioCfg.vol; a.play().catch(()=>{});}catch{} }, Math.max(0,delayMs)); } catch {} }\n    function chimeAt(delayMs){ try { ensureCtx(); const ctx=audioCfg.ctx; if(!ctx||!audioCfg.enabled) return; const base = ctx.currentTime + (delayMs/1000); const master = ctx.createGain(); master.gain.value = audioCfg.vol; master.connect(ctx.destination);\n      const notes = [ {f:880, len:0.18}, {f:1320, len:0.14} ];\n      notes.forEach((n)=>{ const osc=ctx.createOscillator(); const g=ctx.createGain(); const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(2400, base);\n        osc.type='sine'; osc.frequency.setValueAtTime(n.f, base); g.gain.setValueAtTime(0.0001, base); g.gain.exponentialRampToValueAtTime(Math.max(0.001,audioCfg.vol), base+0.02);\n        g.gain.exponentialRampToValueAtTime(0.0001, base + n.len);\n        osc.connect(g).connect(lp).connect(master); osc.start(base); osc.stop(base + n.len + 0.05);\n      }); } catch {} }\n    function playPattern(){ if (!audioCfg.enabled) return; if (audioCfg.url && audioCfg.resolved) { const d=Math.max(0.2, Math.min(2, audioCfg.dur||0.35)); const base=0; playOnceAt(base+0); playOnceAt(base+1*d*1000); playOnceAt(base+2*d*1000); const base2=base+3*d*1000+500; playOnceAt(base2+0); playOnceAt(base2+1*d*1000); playOnceAt(base2+2*d*1000); } else { chimeAt(0); chimeAt(300); chimeAt(600); const gap=600+500; chimeAt(gap+0); chimeAt(gap+300); chimeAt(gap+600); } }
+
+    function ensureCtx() {
+      try {
+        if (!audioCfg.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCfg.ctx = new AC();
+        }
+        if (audioCfg.ctx && audioCfg.ctx.state === 'suspended') audioCfg.ctx.resume();
+      } catch {}
+    }
+
+    function primeAudio(showUnlock = true) {
+      try {
+        if (audioCfg.url && audioCfg.resolved) {
+          const a = new Audio(audioCfg.url);
+          a.preload = 'auto';
+          a.volume = audioCfg.vol;
+          a.addEventListener('loadedmetadata', () => {
+            if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration;
+          }, { once: true });
+          window.__alertProto = a;
+          a.muted = true;
+          const p = a.play();
+          if (p && typeof p.then === 'function') {
+            p.then(() => { a.pause(); hideUnlock(); }).catch(() => { if (showUnlock) showUnlockBtn(); });
+          }
+        } else {
+          ensureCtx();
+          if (audioCfg.ctx && audioCfg.ctx.state === 'running') hideUnlock();
+          else if (showUnlock) showUnlockBtn();
+        }
+      } catch {}
+    }
+
+    function showUnlockBtn() { const b = document.getElementById('soundUnlock'); if (b) b.style.display = 'inline-flex'; }
+    function hideUnlock() { const b = document.getElementById('soundUnlock'); if (b) b.style.display = 'none'; }
+
+    function playOnceAt(delayMs) {
+      try {
+        if (!audioCfg.enabled || !audioCfg.url) return;
+        const src = (window.__alertProto && window.__alertProto.src) || audioCfg.url;
+        setTimeout(() => { try { const a = new Audio(src); a.volume = audioCfg.vol; a.play().catch(() => {}); } catch {} }, Math.max(0, delayMs));
+      } catch {}
+    }
+
+    function chimeAt(delayMs) {
+      try {
+        ensureCtx();
+        const ctx = audioCfg.ctx;
+        if (!ctx || !audioCfg.enabled) return;
+        const base = ctx.currentTime + (delayMs / 1000);
+        const master = ctx.createGain(); master.gain.value = audioCfg.vol; master.connect(ctx.destination);
+        const notes = [ { f: 880, len: 0.18 }, { f: 1320, len: 0.14 } ];
+        notes.forEach((n) => {
+          const osc = ctx.createOscillator(); const g = ctx.createGain(); const lp = ctx.createBiquadFilter();
+          lp.type = 'lowpass'; lp.frequency.setValueAtTime(2400, base);
+          osc.type = 'sine'; osc.frequency.setValueAtTime(n.f, base);
+          g.gain.setValueAtTime(0.0001, base);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.001, audioCfg.vol), base + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, base + n.len);
+          osc.connect(g).connect(lp).connect(master);
+          osc.start(base);
+          osc.stop(base + n.len + 0.05);
+        });
+      } catch {}
+    }
+
+    function playPattern() {
+      if (!audioCfg.enabled) return;
+      if (audioCfg.url && audioCfg.resolved) {
+        const d = Math.max(0.2, Math.min(2, audioCfg.dur || 0.35));
+        const base = 0;
+        playOnceAt(base + 0);
+        playOnceAt(base + 1 * d * 1000);
+        playOnceAt(base + 2 * d * 1000);
+        const base2 = base + 3 * d * 1000 + 500;
+        playOnceAt(base2 + 0);
+        playOnceAt(base2 + 1 * d * 1000);
+        playOnceAt(base2 + 2 * d * 1000);
+      } else {
+        chimeAt(0); chimeAt(300); chimeAt(600);
+        const gap = 600 + 500;
+        chimeAt(gap + 0); chimeAt(gap + 300); chimeAt(gap + 600);
+      }
+    }
 
     function showBanner(payload){
       const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
