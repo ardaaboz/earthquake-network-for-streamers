@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/ap/(.*)", "destination": "/api/$1" },
+    { "source": "/overlay", "destination": "/overlay.html" }
+  ]
+}

@@ -49,6 +49,7 @@
       return u.searchParams.get(key) || def;
     }
     const channel = qs('channel', 'default');
+    let lastTs = '';
 
     function showBanner({ title, message, location, timestamp }) {
       const el = document.getElementById('banner');
@@ -61,20 +62,21 @@
       window.__hideTimer = setTimeout(() => el.classList.remove('show'), 12000);
     }
 
-    function connect() {
-      const es = new EventSource(`/events?channel=${encodeURIComponent(channel)}`);
-      es.addEventListener('ready', () => {
-        console.log('SSE connected for channel:', channel);
-      });
-      es.addEventListener('alert', (ev) => {
-        try { showBanner(JSON.parse(ev.data)); } catch {}
-      });
-      es.onerror = () => {
-        try { es.close(); } catch {}
-        setTimeout(connect, 1500);
-      };
+    async function poll() {
+      try {
+        const url = `/api/poll?channel=${encodeURIComponent(channel)}${lastTs ? `&since=${encodeURIComponent(lastTs)}` : ''}`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.update && j.payload) {
+            lastTs = j.payload.timestamp || '';
+            showBanner(j.payload);
+          }
+        }
+      } catch {}
+      setTimeout(poll, 1200);
     }
-    window.addEventListener('DOMContentLoaded', connect);
+    window.addEventListener('DOMContentLoaded', poll);
   </script>
 </head>
 <body>
@@ -88,4 +90,3 @@
   </div>
 </body>
 </html>
-

@@ -10,21 +10,25 @@ Bu proje, Deprem Ağı uygulamasından telefona gelen erken uyarı bildirimlerin
 
 Kurulum herkes için kolay olacak şekilde yazılmıştır. Teknik bilgi gerektirmez.
 
-1) Ücretsiz barındırma (Render önerilir)
-- https://render.com adresine ücretsiz hesap açın.
-- Bu projeyi kendi GitHub hesabınıza “Fork” edin veya ZIP olarak indirip yeni repo açın.
-- Render’da New → Web Service → GitHub reponuzu seçin.
-- Build/Start komutlarını değiştirmeyin (Render otomatik `npm install` ve `npm start` çalıştırır).
-- Environment → Add Environment Variable:
-  - `GLOBAL_SECRET` = güçlü bir gizli anahtar (ör. `my-super-secret-123`)
-- Deploy edin. Size `https://<servis-adiniz>.onrender.com` gibi bir URL verilecektir.
+1) Tamamen ücretsiz barındırma (Vercel + Upstash)
+- Vercel (Hobby) ücretsizdir ve kredi kartı istemez. Sunucusuz fonksiyonlar uzun süre açık bağlantıları sınırladığı için, overlay SSE yerine hızlı polling kullanır (1–1.2 sn’de bir). Erken uyarı için yeterince hızlıdır.
+- Ücretsiz kalıcı hafıza için Upstash Redis (ücretsiz plan) kullanıyoruz; kredi kartı istemez.
 
-Alternatif ücretsizler: Railway, Fly.io. (Ücretsiz planlar uykuya geçebilir; bu normaldir.)
+Adımlar (teknik olmayan):
+- GitHub: Bu projeyi Fork edin (veya yeni repo oluşturup içeriği yükleyin).
+- Upstash: https://upstash.com → Sign Up → Create Redis Database (free plan)
+  - Dashboard’da `REST URL` ve `REST TOKEN` değerlerini not alın.
+- Vercel: https://vercel.com → Sign Up → Add New Project → GitHub reponuzu seçin → Deploy.
+  - Settings → Environment Variables ekleyin:
+    - `GLOBAL_SECRET` = güçlü gizli anahtar (örn. `my-super-secret-123`)
+    - `UPSTASH_REDIS_REST_URL` = Upstash’tan kopyaladığınız URL
+    - `UPSTASH_REDIS_REST_TOKEN` = Upstash’tan kopyaladığınız Token
+  - “Redeploy” yapın. Uygulama URL’si: `https://<proje-adiniz>.vercel.app`
 
 2) Yayıncı linki (OBS Browser Source)
 - OBS’de Kaynak Ekle → Browser (Tarayıcı) seçin.
 - URL alanına şunu yazın:
-  `https://<servis-adiniz>.onrender.com/overlay?channel=BENIM_KANALIM`
+  `https://<proje-adiniz>.vercel.app/overlay?channel=BENIM_KANALIM`
 - Genişlik: 1920, Yükseklik: 1080 (veya yayın çözünürlüğünüz). Arka plan transparandır.
 - `channel` değeri her yayıncı için farklı, tahmin edilmesi zor bir yazı olsun (ör. `kanal-kerem-3c9jv7`).
 
@@ -34,7 +38,7 @@ Alternatif ücretsizler: Railway, Fly.io. (Ücretsiz planlar uykuya geçebilir; 
   - Uygulama: Deprem Ağı (erken uyarı uygulaması).
   - Gerekirse, metin filtrelerini “Erken Uyarı”, “Ön Uyarı”, “Deprem” gibi kelimelerle sınırlandırın.
 - Eylem ekleyin: HTTP İsteği → Method: POST → URL:
-  `https://<servis-adiniz>.onrender.com/hook`
+  `https://<proje-adiniz>.vercel.app/api/hook`
 - Başlık: `Content-Type: application/json`
 - Gövde (JSON) alanına aynen şunu yapıştırın (köşeli parantezli alanlar MacroDroid değişkenleridir):
 ```
@@ -53,7 +57,8 @@ Hepsi bu. Deprem Ağı’ndan uyarı gelince, yayın ekranında üstte animasyon
 
 Test etme (telefonsuz):
 - OBS’de overlay açıkken tarayıcıda şu linki ziyaret edin:
-  `https://<servis-adiniz>.onrender.com/send?channel=BENIM_KANALIM&msg=Test&loc=Istanbul&secret=GLOBAL_SECRET_DEGERINIZ`
+  `https://<proje-adiniz>.vercel.app/api/send?channel=BENIM_KANALIM&msg=Test&loc=Istanbul&secret=GLOBAL_SECRET_DEGERINIZ`
+- Alternatif: Android’de MacroDroid’de `hook` çağırın (veya Postman ile `POST /api/hook`).
 - Bant görünüyor ise sistem hazırdır.
 
 Çoklu yayıncı (tek sistem):
@@ -70,8 +75,9 @@ Güvenlik notları:
 - Servo uykudan uyanırken ilk çağrı 1‑2 sn gecikebilir; bu yayını etkilemez.
 
 Geliştirici Notları
-- Sunucu: Node.js (Express) + SSE.
-- Webhook: `POST /hook` body örneği:
+- Yerel sunucu: Node.js (Express) + SSE (`/events`).
+- Vercel sürümü: Serverless + Upstash; overlay `/api/poll` ile hızlı polling yapar.
+- Webhook: `POST /hook` (yerelde `/hook`, Vercel’de `/api/hook`) body örneği:
 ```
 {
   "secret": "...",
@@ -83,19 +89,23 @@ Geliştirici Notları
   "source": "deprem-agi"
 }
 ```
-- İzleyici akışı (OBS): `GET /overlay?channel=...` → içerden `GET /events?channel=...` açar.
-- Yayıncılara gönderim: SSE ile `event: alert` payload.
+- İzleyici akışı (OBS):
+  - Yerel: `GET /overlay?channel=...` → içerden `GET /events?channel=...` (SSE)
+  - Vercel: `GET /overlay?channel=...` → içerden `GET /api/poll?channel=...` (Polling)
 
-Yerel çalıştırma
+Yerel çalıştırma (isteğe bağlı)
 ```
 npm install
 npm start
-# http://localhost:8080/overlay?channel=deneme
-# Test: http://localhost:8080/send?channel=deneme&msg=Test&loc=Istanbul
+# http://localhost:8080/overlay?channel=deneme (yerel Express sürümü SSE kullanır)
+# Vercel sürümünü yerelde denemek için `vercel dev` kullanabilirsiniz (opsiyonel).
 ```
+
+Alternatif tamamen ücretsiz yol (Cloudflare)
+- Cloudflare Workers + KV ile de ücretsiz ve kredi kartsız çalışır.
+- İsterseniz Workers tabanlı sürümü de ekleyebilirim; mantık polling aynıdır (`/hook` yazar, overlay `/poll` ister).
 
 Sık Sorulanlar
 - Deprem Ağı dışında bir sistem? Hayır; sadece Deprem Ağı bildirimleri hedeflenmiştir.
 - Ücret? Barındırma ücretsiz planlarla 0 TL; MacroDroid ücretsizdir.
 - iPhone? Bu kurulum Android içindir (bildirim yakalama nedeniyle). iOS için farklı yol gerekir.
-
