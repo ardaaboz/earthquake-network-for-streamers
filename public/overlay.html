@@ -16,12 +16,12 @@
     }
     .banner {
       position: fixed; left: 50%; top: -200px; transform: translateX(-50%);
-      min-width: 60vw; max-width: 90vw;
+      width: min(520px, calc(100vw - 96px));
       color: var(--text); background: var(--bg);
       border: 2px solid var(--accent);
       box-shadow: 0 8px 24px rgba(0,0,0,0.5);
       border-radius: 10px; backdrop-filter: blur(6px);
-      padding: 16px 20px; display: flex; gap: 12px; align-items: center;
+      padding: 18px 22px 22px; display: flex; gap: 12px; align-items: center; justify-content: center; text-align: center;
       transition: transform 400ms ease, top 400ms ease, opacity 400ms ease;
       opacity: 0;
     }
@@ -38,7 +38,7 @@
       70% { box-shadow: 0 0 0 16px rgba(255,59,59,0); }
       100% { box-shadow: 0 0 0 0 rgba(255,59,59,0); }
     }
-    .content { display: grid; gap: 4px; }
+    .content { display: grid; gap: 4px; place-items: center; text-align: center; }
     .title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; }
     .meta { font-size: 16px; opacity: 0.9; }
     .small { font-size: 12px; opacity: 0.7; }
@@ -51,6 +51,47 @@
     const channel = qs('channel', 'default');
     let lastId = '';
 
+    // Optional alert sound from URL param `soundUrl`. Example: &soundUrl=/alert.mp3
+    const audioCfg = {
+      enabled: qs('mute','0') !== '1' && qs('sound','1') !== '0',
+      url: qs('soundUrl',''),
+      vol: Math.max(0, Math.min(1, parseFloat(qs('vol','1')) || 1)),
+      dur: 0.35,
+    };
+    function primeAudio() {
+      try {
+        if (!audioCfg.url) return;
+        const a = new Audio(audioCfg.url);
+        a.preload = 'auto';
+        a.volume = audioCfg.vol;
+        a.addEventListener('loadedmetadata', () => {
+          if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration;
+        }, { once: true });
+        window.__alertProto = a;
+      } catch {}
+    }
+    function playOnceAt(delayMs) {
+      try {
+        if (!audioCfg.enabled || !audioCfg.url) return;
+        const src = (window.__alertProto && window.__alertProto.src) || audioCfg.url;
+        setTimeout(() => {
+          try { const a = new Audio(src); a.volume = audioCfg.vol; a.play().catch(()=>{}); } catch {}
+        }, Math.max(0, delayMs));
+      } catch {}
+    }
+    function playPattern() {
+      if (!audioCfg.enabled || !audioCfg.url) return;
+      const d = Math.max(0.2, Math.min(2, audioCfg.dur || 0.35));
+      const base = 0;
+      playOnceAt(base + 0);
+      playOnceAt(base + 1*d*1000);
+      playOnceAt(base + 2*d*1000);
+      const base2 = base + 3*d*1000 + 500;
+      playOnceAt(base2 + 0);
+      playOnceAt(base2 + 1*d*1000);
+      playOnceAt(base2 + 2*d*1000);
+    }
+
     function showBanner(payload) {
       const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
       const el = document.getElementById('banner');
@@ -60,7 +101,12 @@
       el.querySelector('.title').textContent = displayTitle || title || 'Deprem Ağı Uyarısı';
       const meta = displayMeta || [message, location].filter(Boolean).join(' • ');
       el.querySelector('.meta').textContent = meta || '';
-      el.querySelector('.small').textContent = timestamp ? new Date(timestamp).toLocaleString() : '';
+      try {
+        const d = timestamp ? new Date(timestamp) : new Date();
+        const tr = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+        el.querySelector('.small').textContent = tr;
+      } catch { el.querySelector('.small').textContent = ''; }
+      playPattern();
       el.classList.add('show');
       clearTimeout(window.__hideTimer);
       window.__hideTimer = setTimeout(() => el.classList.remove('show'), 12000);
@@ -81,7 +127,7 @@
       } catch {}
       setTimeout(poll, 1200);
     }
-    window.addEventListener('DOMContentLoaded', poll);
+    window.addEventListener('DOMContentLoaded', () => { primeAudio(); poll(); });
   </script>
 </head>
 <body>
