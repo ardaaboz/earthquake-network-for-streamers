@@ -1,4 +1,4 @@
-import { Redis } from '@upstash/redis';
+﻿import { Redis } from '@upstash/redis';
 import { normalizeAlert } from '../lib/normalize.js';
 
 const redis = new Redis({
@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'method_not_allowed' });
   }
   try {
+    res.setHeader('Content-Type','application/json; charset=UTF-8');
     const { msg = 'Test Deprem Ağı uyarısı', loc = 'Istanbul', channel = 'default', secret } = req.query;
     const expected = process.env.GLOBAL_SECRET || '';
     if (expected && secret !== expected) {
@@ -36,3 +37,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'server_error' });
   }
 }
+

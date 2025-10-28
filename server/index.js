@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 
@@ -49,7 +49,7 @@ app.get(['/','/overlay'], (req, res) => {
 app.get('/events', (req, res) => {
   const channel = (req.query.channel || 'default').toString();
 
-  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Content-Type', 'text/event-stream; charset=UTF-8');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
@@ -86,7 +86,7 @@ app.post('/hook', (req, res) => {
 
     const payload = {
       type: 'earthquake_alert',
-      title: title || 'Deprem Ağı Uyarısı',
+      title: title || 'Deprem AÄŸÄ± UyarÄ±sÄ±',
       message: message || (raw && String(raw)) || '',
       location: location || '',
       timestamp: timestamp || new Date().toISOString(),
@@ -114,14 +114,14 @@ app.post('/hook', (req, res) => {
 
 // Simple debug sender (GET for manual tests)
 app.get('/send', (req, res) => {
-  const { msg = 'Test Deprem Ağı uyarısı', loc = 'Istanbul', channel = 'default', secret } = req.query;
+  const { msg = 'Test Deprem AÄŸÄ± uyarÄ±sÄ±', loc = 'Istanbul', channel = 'default', secret } = req.query;
   if (GLOBAL_SECRET && secret !== GLOBAL_SECRET) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
   const body = {
     secret,
     channel,
-    title: 'Erken Uyarı',
+    title: 'Erken UyarÄ±',
     message: String(msg),
     location: String(loc),
     timestamp: new Date().toISOString(),
@@ -144,4 +144,6 @@ app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+
 

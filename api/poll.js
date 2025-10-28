@@ -1,4 +1,4 @@
-import { Redis } from '@upstash/redis';
+﻿import { Redis } from '@upstash/redis';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -6,6 +6,7 @@ const redis = new Redis({
 });
 
 export default async function handler(req, res) {
+  res.setHeader('Content-Type','application/json; charset=UTF-8');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ ok: false, error: 'method_not_allowed' });
@@ -33,3 +34,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'server_error' });
   }
 }
+

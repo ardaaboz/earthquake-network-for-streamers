@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Deprem AÄŸÄ± â€¢ CanlÄ± YayÄ±n UyarÄ±</title>
+  <title>Deprem Ağı • Canlı Yayın Uyarı</title>
   <style>
     :root {
       --bg: rgba(0,0,0,0.90);
@@ -171,8 +171,8 @@
       const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
       if (accent) document.documentElement.style.setProperty('--accent', accent);
       const el=document.getElementById('banner');
-      el.querySelector('.title').textContent = displayTitle || title || 'Deprem AÄŸÄ± UyarÄ±sÄ±';
-      const meta = displayMeta || [message, location].filter(Boolean).join(' Â· ');
+      el.querySelector('.title').textContent = displayTitle || title || 'Deprem Ağı Uyarısı';
+      const meta = displayMeta || [message, location].filter(Boolean).join(' • ');
       el.querySelector('.meta').textContent = meta || '';
       try { const d = timestamp ? new Date(timestamp) : new Date(); const tr = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).format(d); el.querySelector('.small').textContent = tr; } catch { el.querySelector('.small').textContent=''; }
       playPattern();
@@ -195,10 +195,11 @@
   <div id="banner" class="banner" role="status" aria-live="polite">
     <div class="pulse" aria-hidden="true"></div>
     <div class="content">
-      <div class="title">Erken UyarÄ±</div>
-      <div class="meta">Deprem AÄŸÄ± uyarÄ±sÄ±</div>
+      <div class="title">Erken Uyarı</div>
+      <div class="meta">Deprem Ağı uyarısı</div>
       <div class="small"></div>
     </div>
   </div>
+
 
 
