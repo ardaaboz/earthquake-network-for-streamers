@@ -46,6 +46,27 @@
       vol: Math.max(0, Math.min(1, parseFloat(qs('vol','1')) || 1)),
       dur: 0.35,
     };
+
+    async function resolveSoundUrl() {
+      try {
+        const provided = qs('soundUrl','');
+        const candidates = [];
+        if (provided) candidates.push(provided);
+        candidates.push('/alert.mp3');
+        candidates.push('/public/alert.mp3');
+        candidates.push('/static/alert.mp3');
+        for (const u of candidates) {
+          try {
+            const h = await fetch(u, { method: 'HEAD', cache: 'no-store' });
+            if (h.ok) { audioCfg.url = u; return; }
+          } catch {}
+          try {
+            const g = await fetch(u, { method: 'GET', cache: 'no-store' });
+            if (g.ok) { audioCfg.url = u; return; }
+          } catch {}
+        }
+      } catch {}
+    }
     function primeAudio(showUnlock=true) {
       try {
         if (!audioCfg.url) return;
@@ -86,7 +107,11 @@
     }
 
     function dbg(msg){ if(qs('debug','0')==='1'){ const d=document.getElementById('dbg'); if(d){ d.style.display='block'; d.textContent=msg; } } }
-    window.addEventListener('DOMContentLoaded', ()=>{ const tried=startSSE(); setTimeout(()=>{ if(!usingSSE) poll(); }, 700); primeAudio(); });
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const tried=startSSE();
+      setTimeout(()=>{ if(!usingSSE) poll(); }, 700);
+      resolveSoundUrl().then(()=>{ primeAudio(); });
+    });
     window.addEventListener('pointerdown', ()=> primeAudio(false));
   </script>
 </head>
