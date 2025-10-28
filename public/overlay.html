@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Deprem Ağı • Canlı Yayın Uyarı</title>
+  <title>Deprem AÄŸÄ± â€¢ CanlÄ± YayÄ±n UyarÄ±</title>
   <style>
     :root {
       --bg: rgba(0,0,0,0.90);
@@ -116,7 +116,7 @@
       } catch {}
     }
 
-    function primeAudio(showUnlock = true) {
+    function primeAudio() {
       try {
         if (audioCfg.url && audioCfg.resolved) {
           const a = new Audio(audioCfg.url);
@@ -124,14 +124,12 @@
           a.addEventListener('loadedmetadata', () => { if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration; }, { once: true });
           window.__alertProto = a;
           a.muted = true;
-          const p = a.play(); if (p && p.then) p.then(() => { a.pause(); hideUnlock(); }).catch(() => { if (showUnlock) showUnlockBtn(); });
+          const p = a.play(); if (p && p.then) p.then(() => { a.pause(); }).catch(() => {});
         } else {
-          ensureCtx(); if (audioCfg.ctx && audioCfg.ctx.state === 'running') hideUnlock(); else if (showUnlock) showUnlockBtn();
+          ensureCtx();
         }
       } catch {}
     }
-    function showUnlockBtn(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='inline-flex'; }
-    function hideUnlock(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }
 
     function playOnceAt(delayMs){ try { if (!audioCfg.enabled || !audioCfg.url) return; const src=(window.__alertProto&&window.__alertProto.src)||audioCfg.url; setTimeout(()=>{ try{ const a=new Audio(src); a.volume=audioCfg.vol; a.play().catch(()=>{});}catch{} }, Math.max(0,delayMs)); } catch {} }
 
@@ -173,8 +171,8 @@
       const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
       if (accent) document.documentElement.style.setProperty('--accent', accent);
       const el=document.getElementById('banner');
-      el.querySelector('.title').textContent = displayTitle || title || 'Deprem Ağı Uyarısı';
-      const meta = displayMeta || [message, location].filter(Boolean).join(' · ');
+      el.querySelector('.title').textContent = displayTitle || title || 'Deprem AÄŸÄ± UyarÄ±sÄ±';
+      const meta = displayMeta || [message, location].filter(Boolean).join(' Â· ');
       el.querySelector('.meta').textContent = meta || '';
       try { const d = timestamp ? new Date(timestamp) : new Date(); const tr = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).format(d); el.querySelector('.small').textContent = tr; } catch { el.querySelector('.small').textContent=''; }
       playPattern();
@@ -190,19 +188,15 @@
 
     function dbg(msg){ if(qs('debug','0')==='1'){ const d=document.getElementById('dbg'); if(d){ d.style.display='block'; d.textContent=msg; } } }
     window.addEventListener('DOMContentLoaded', ()=>{ const tried=startSSE(); setTimeout(()=>{ if(!usingSSE) poll(); }, 700); resolveSoundUrl().then(()=>{ primeAudio(); }); });
-    window.addEventListener('pointerdown', ()=> primeAudio(false));
+    window.addEventListener('pointerdown', ()=> primeAudio());
   </script>
 </head>
 <body>
   <div id="banner" class="banner" role="status" aria-live="polite">
     <div class="pulse" aria-hidden="true"></div>
     <div class="content">
-      <div class="title">Erken Uyarı</div>
-      <div class="meta">Deprem Ağı uyarısı</div>
+      <div class="title">Erken UyarÄ±</div>
+      <div class="meta">Deprem AÄŸÄ± uyarÄ±sÄ±</div>
       <div class="small"></div>
     </div>
   </div>
-  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:rgba(0,0,0,0.92); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(function(){ try{ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }catch{}; primeAudio(false); })()">Sesi Etkinleştir</button>
-  <div id="dbg"></div>
-</body>
-</html>
