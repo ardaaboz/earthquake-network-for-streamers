@@ -26,11 +26,22 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
-// Static overlay assets
-app.use('/static', express.static('public', { extensions: ['html'] }));
+// Static overlay assets (ensure UTF-8 charset for text types)
+app.use('/static', express.static('public', {
+  extensions: ['html'],
+  setHeaders(res, path) {
+    try {
+      if (path.endsWith('.html')) res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+      else if (path.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=UTF-8');
+      else if (path.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+      else if (path.endsWith('.json')) res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+    } catch {}
+  }
+}));
 
 // Overlay page (for OBS Browser Source)
 app.get(['/','/overlay'], (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
   res.sendFile(process.cwd() + '/public/overlay.html');
 });
 
