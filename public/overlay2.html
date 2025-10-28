@@ -159,6 +159,37 @@
       window.__hideTimer = setTimeout(() => el.classList.remove('show'), 12000);
     }
 
+    let usingSSE = false;
+    let sse;
+
+    function startSSE() {
+      try {
+        if (!('EventSource' in window)) return false;
+        const url = `/events?channel=${encodeURIComponent(channel)}`;
+        sse = new EventSource(url, { withCredentials: false });
+        sse.addEventListener('open', () => {
+          usingSSE = true;
+          const dbg = document.getElementById('dbg');
+          if (dbg && qs('debug','0')==='1') dbg.textContent = 'sse open';
+        });
+        sse.addEventListener('alert', (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            lastId = payload.id || payload.timestamp || '';
+            showBanner(payload);
+          } catch {}
+        });
+        sse.addEventListener('error', () => {
+          const dbg = document.getElementById('dbg');
+          if (dbg && qs('debug','0')==='1') dbg.textContent = 'sse error';
+          try { sse.close(); } catch {}
+          usingSSE = false;
+          poll();
+        });
+        return true;
+      } catch { return false; }
+    }
+
     async function poll() {
       try {
         const bust = Date.now();
@@ -181,7 +212,12 @@
       }
       setTimeout(poll, 1200);
     }
-    window.addEventListener('DOMContentLoaded', () => { poll(); ensureAudio(); });
+    window.addEventListener('DOMContentLoaded', () => {
+      // Try SSE first (works in local server). If it doesn't open quickly, fall back to polling.
+      const tried = startSSE();
+      setTimeout(() => { if (!usingSSE) poll(); }, 800);
+      ensureAudio();
+    });
     window.addEventListener('pointerdown', ensureAudio);
     window.addEventListener('keydown', ensureAudio);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureAudio(); });
