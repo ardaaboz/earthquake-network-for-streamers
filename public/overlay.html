@@ -19,8 +19,8 @@
       width: min(520px, calc(100vw - 96px));
       color: var(--text); background: var(--bg);
       border: 2px solid var(--accent);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      border-radius: 10px; backdrop-filter: blur(6px);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+      border-radius: 12px; backdrop-filter: blur(8px);
       padding: 18px 22px 22px; display: flex; gap: 12px; align-items: center; justify-content: center; text-align: center;
       transition: transform 400ms ease, top 400ms ease, opacity 400ms ease;
       opacity: 0;
@@ -40,8 +40,10 @@
     }
     .content { display: grid; gap: 4px; place-items: center; text-align: center; }
     .title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; }
-    .meta { font-size: 16px; opacity: 0.9; }
-    .small { font-size: 12px; opacity: 0.7; }
+    .meta { font-size: 16px; color: rgba(255,255,255,0.75); }
+    .small { font-size: 12px; color: rgba(255,255,255,0.75); }
+    .icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,59,59,0.12); }
+    .icon svg { width: 30px; height: 30px; color: var(--accent); filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
   </style>
   <script>
     function qs(key, def='') {
@@ -54,7 +56,7 @@
     // Optional alert sound from URL param `soundUrl`. Example: &soundUrl=/alert.mp3
     const audioCfg = {
       enabled: qs('mute','0') !== '1' && qs('sound','1') !== '0',
-      url: qs('soundUrl',''),
+      url: qs('soundUrl','/alert.mp3'),
       vol: Math.max(0, Math.min(1, parseFloat(qs('vol','1')) || 1)),
       dur: 0.35,
     };
@@ -68,6 +70,7 @@
           if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration;
         }, { once: true });
         window.__alertProto = a;
+        try { a.muted = true; a.play().then(() => { a.pause(); var b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }).catch(() => { var b=document.getElementById('soundUnlock'); if(b) b.style.display='inline-flex'; }); } catch {}
       } catch {}
     }
     function playOnceAt(delayMs) {
@@ -128,16 +131,25 @@
       setTimeout(poll, 1200);
     }
     window.addEventListener('DOMContentLoaded', () => { primeAudio(); poll(); });
+    window.addEventListener('pointerdown', () => { primeAudio(false); });
   </script>
 </head>
 <body>
   <div id="banner" class="banner" role="status" aria-live="polite">
     <div class="pulse" aria-hidden="true"></div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 3L1 21h22L12 3z" fill="currentColor" opacity="0.18" />
+        <path d="M12 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="17" r="1.6" fill="currentColor"/>
+      </svg>
+    </div>
     <div class="content">
       <div class="title">Erken Uyarı</div>
       <div class="meta">Deprem Ağı uyarısı</div>
       <div class="small"></div>
     </div>
   </div>
+  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:rgba(8,10,14,0.92); color:#fff; border:1px solid rgba(255,59,59,0.35); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(function(){try{var b=document.getElementById('soundUnlock'); if(b) b.style.display='none';}catch{}; primeAudio(false);})();">Sesi Etkinleştir</button>
 </body>
 </html>
