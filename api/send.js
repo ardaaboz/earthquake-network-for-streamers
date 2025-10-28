@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { normalizeAlert } from '../lib/normalize.js';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -16,7 +17,7 @@ export default async function handler(req, res) {
     if (expected && secret !== expected) {
       return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
-    const payload = {
+    const base = {
       type: 'earthquake_alert',
       id: Date.now().toString(),
       title: 'Erken Uyarı',
@@ -26,6 +27,8 @@ export default async function handler(req, res) {
       source: 'manual',
       channel: String(channel),
     };
+    const norm = normalizeAlert(base);
+    const payload = { ...base, ...norm };
     await redis.set(`ch:${channel}`, payload, { ex: 300 });
     return res.json({ ok: true, payload });
   } catch (e) {

@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { normalizeAlert } from '../lib/normalize.js';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -17,7 +18,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
 
-    const payload = {
+    const base = {
       type: 'earthquake_alert',
       id: Date.now().toString(),
       title: title || 'Deprem Ağı Uyarısı',
@@ -27,6 +28,8 @@ export default async function handler(req, res) {
       source: source || 'deprem-agi',
       channel: String(channel),
     };
+    const norm = normalizeAlert(base);
+    const payload = { ...base, ...norm };
 
     const key = `ch:${channel}`;
     // Store latest payload with short TTL so polling clients can fetch it.

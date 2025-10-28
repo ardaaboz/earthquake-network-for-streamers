@@ -51,10 +51,14 @@
     const channel = qs('channel', 'default');
     let lastId = '';
 
-    function showBanner({ title, message, location, timestamp }) {
+    function showBanner(payload) {
+      const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
       const el = document.getElementById('banner');
-      el.querySelector('.title').textContent = title || 'Deprem Ağı Uyarısı';
-      const meta = [message, location].filter(Boolean).join(' • ');
+      if (accent) {
+        document.documentElement.style.setProperty('--accent', accent);
+      }
+      el.querySelector('.title').textContent = displayTitle || title || 'Deprem Ağı Uyarısı';
+      const meta = displayMeta || [message, location].filter(Boolean).join(' • ');
       el.querySelector('.meta').textContent = meta || '';
       el.querySelector('.small').textContent = timestamp ? new Date(timestamp).toLocaleString() : '';
       el.classList.add('show');
