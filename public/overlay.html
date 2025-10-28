@@ -19,7 +19,7 @@
     }
     .banner {
       position: fixed; left: 50%; top: -220px; transform: translate(-50%, 0);
-      width: min(520px, calc(100vw - 72px));
+      width: min(520px, calc(100vw - 96px));
       color: var(--text);
       background: linear-gradient(180deg, var(--bg), var(--bg2));
       border: 1px solid var(--accent-soft);
@@ -27,7 +27,7 @@
       outline-offset: -1px;
       box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent);
       border-radius: 14px; backdrop-filter: blur(8px) saturate(130%);
-      padding: 16px 18px 20px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
+      padding: 18px 22px 22px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
       transition: transform 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
       opacity: 0;
     }
@@ -58,6 +58,7 @@
       lastPlay: 0,
       url: null,
       buffer: null,
+      htmlDuration: 0,
     };
 
     async function ensureAudio() {
@@ -70,13 +71,16 @@
           await audioState.ctx.resume();
         }
         if (!audioState.url) {
-          // Prefer static in public if present, otherwise API fallback
-          audioState.url = qs('soundUrl', '/alert.mp3');
+          // Prefer API route for consistent serving on Vercel; local dev also works
+          audioState.url = qs('soundUrl', '/api/alert');
         }
         if (!audioState.buffer) {
           try { await loadAlertBuffer(audioState.url); }
-          catch { try { await loadAlertBuffer('/api/alert'); } catch {} }
+          catch { try { await loadAlertBuffer('/alert.mp3'); } catch {} }
         }
+        // Prime HTMLAudio metadata for duration
+        const elAudio = document.getElementById('alertEl');
+        if (elAudio && !elAudio.src) elAudio.src = audioState.url;
         const el = document.getElementById('soundUnlock');
         if (el && audioState.ctx.state === 'running') el.style.display = 'none';
       } catch {}
@@ -128,6 +132,27 @@
       audioState.lastPlay = base2 + 3*d;
     }
 
+    function playHtmlAudioPattern(base = performance.now()/1000) {
+      const src = audioState.url || '/api/alert';
+      const d = audioState.htmlDuration || audioState.buffer?.duration || 0.4;
+      function playAt(delaySec) {
+        const a = new Audio(src);
+        a.preload = 'auto';
+        a.volume = Math.max(0.001, audioState.volume);
+        setTimeout(() => { a.play().catch(() => {}); }, Math.max(0, (base + delaySec - performance.now()/1000) * 1000));
+      }
+      // 3 plays
+      playAt(0);
+      playAt(1*d);
+      playAt(2*d);
+      // pause 0.5s then 3 plays again
+      const base2 = 3*d + 0.5;
+      playAt(base2 + 0*d);
+      playAt(base2 + 1*d);
+      playAt(base2 + 2*d);
+      audioState.lastPlay = (performance.now()/1000) + base2 + 3*d;
+    }
+
     async function playWarningSound() {
       if (!audioState.enabled) return;
       try {
@@ -140,16 +165,17 @@
         }
         // If buffer is ready, use it; else use a simple tone fallback
         const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.02);
-        if (audioState.buffer) {
-          playBufferPattern(ctx, now);
-        } else {
-          // fallback: brief triple chirp
-          tone(ctx, now + 0.00, 0.16, 920, 860, 'sine');
-          tone(ctx, now + 0.22, 0.16, 820, 760, 'sine');
-          tone(ctx, now + 0.44, 0.22, 720, 640, 'sine');
+        // Try HTMLAudio pattern first for environments where WebAudio may be paused/inactive
+        try { playHtmlAudioPattern(); } catch {}
+        if (audioState.buffer) playBufferPattern(ctx, now);
+        else {
+          // Tone fallback if both mp3 paths failed
+          tone(ctx, now + 0.00, 0.18, 880, 820, 'sine');
+          tone(ctx, now + 0.22, 0.18, 780, 720, 'sine');
+          tone(ctx, now + 0.44, 0.22, 680, 620, 'sine');
           audioState.lastPlay = now + 0.70;
         }
-
+      
       } catch {}
     }
 
@@ -220,6 +246,7 @@
       <div class="small"></div>
     </div>
   </div>
-  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:var(--bg2); color:var(--text); border:1px solid var(--accent-soft); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(async ()=>{audioState.enabled=true; await ensureAudio();})()">Enable sound</button>
+  <audio id="alertEl" preload="auto" style="display:none" onloadedmetadata="audioState.htmlDuration=this.duration"></audio>
+  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:var(--bg2); color:var(--text); border:1px solid var(--accent-soft); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(async ()=>{audioState.enabled=true; await ensureAudio(); const a=document.getElementById('alertEl'); if(a){try{await a.play();}catch{}}})()">Enable sound</button>
 </body>
 </html>
