@@ -39,7 +39,7 @@
     const channel = qs('channel', 'default');
     let lastId = '';
 
-    // Sound: resolve file if provided or fallback to built-in chime
+    // Sound: prefer file if resolved, otherwise WebAudio chime
     const audioCfg = {
       enabled: qs('mute','0') !== '1' && qs('sound','1') !== '0',
       url: qs('soundUrl','/alert.mp3'),
@@ -58,24 +58,15 @@
         candidates.push('/public/alert.mp3');
         candidates.push('/static/alert.mp3');
         for (const u of candidates) {
-          try {
-            const h = await fetch(u, { method: 'HEAD', cache: 'no-store' });
-            if (h.ok) { audioCfg.url = u; audioCfg.resolved = true; return; }
-          } catch {}
-          try {
-            const g = await fetch(u, { method: 'GET', cache: 'no-store' });
-            if (g.ok) { audioCfg.url = u; audioCfg.resolved = true; return; }
-          } catch {}
+          try { const h = await fetch(u, { method: 'HEAD', cache: 'no-store' }); if (h.ok) { audioCfg.url = u; audioCfg.resolved = true; return; } } catch {}
+          try { const g = await fetch(u, { method: 'GET', cache: 'no-store' }); if (g.ok) { audioCfg.url = u; audioCfg.resolved = true; return; } } catch {}
         }
       } catch {}
     }
 
     function ensureCtx() {
       try {
-        if (!audioCfg.ctx) {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          if (AC) audioCfg.ctx = new AC();
-        }
+        if (!audioCfg.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCfg.ctx = new AC(); }
         if (audioCfg.ctx && audioCfg.ctx.state === 'suspended') audioCfg.ctx.resume();
       } catch {}
     }
@@ -84,111 +75,52 @@
       try {
         if (audioCfg.url && audioCfg.resolved) {
           const a = new Audio(audioCfg.url);
-          a.preload = 'auto';
-          a.volume = audioCfg.vol;
-          a.addEventListener('loadedmetadata', () => {
-            if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration;
-          }, { once: true });
+          a.preload = 'auto'; a.volume = audioCfg.vol;
+          a.addEventListener('loadedmetadata', () => { if (a.duration && isFinite(a.duration)) audioCfg.dur = a.duration; }, { once: true });
           window.__alertProto = a;
           a.muted = true;
-          const p = a.play();
-          if (p && typeof p.then === 'function') {
-            p.then(() => { a.pause(); hideUnlock(); }).catch(() => { if (showUnlock) showUnlockBtn(); });
-          }
+          const p = a.play(); if (p && p.then) p.then(() => { a.pause(); hideUnlock(); }).catch(() => { if (showUnlock) showUnlockBtn(); });
         } else {
-          ensureCtx();
-          if (audioCfg.ctx && audioCfg.ctx.state === 'running') hideUnlock();
-          else if (showUnlock) showUnlockBtn();
+          ensureCtx(); if (audioCfg.ctx && audioCfg.ctx.state === 'running') hideUnlock(); else if (showUnlock) showUnlockBtn();
         }
       } catch {}
     }
+    function showUnlockBtn(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='inline-flex'; }
+    function hideUnlock(){ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }
 
-    function showUnlockBtn() { const b = document.getElementById('soundUnlock'); if (b) b.style.display = 'inline-flex'; }
-    function hideUnlock() { const b = document.getElementById('soundUnlock'); if (b) b.style.display = 'none'; }
-
-    function playOnceAt(delayMs) {
-      try {
-        if (!audioCfg.enabled || !audioCfg.url) return;
-        const src = (window.__alertProto && window.__alertProto.src) || audioCfg.url;
-        setTimeout(() => { try { const a = new Audio(src); a.volume = audioCfg.vol; a.play().catch(() => {}); } catch {} }, Math.max(0, delayMs));
-      } catch {}
-    }
+    function playOnceAt(delayMs){ try { if (!audioCfg.enabled || !audioCfg.url) return; const src=(window.__alertProto&&window.__alertProto.src)||audioCfg.url; setTimeout(()=>{ try{ const a=new Audio(src); a.volume=audioCfg.vol; a.play().catch(()=>{});}catch{} }, Math.max(0,delayMs)); } catch {} }
 
     function chimeAt(delayMs) {
-  try {
-    ensureCtx();
-    const ctx = audioCfg.ctx;
-    if (!ctx || !audioCfg.enabled) return;
-    const t0 = ctx.currentTime + (delayMs / 1000);
-
-    const out = ctx.createGain();
-    out.gain.value = 1;
-    out.connect(ctx.destination);
-
-    const mix = ctx.createGain();
-    mix.gain.value = Math.max(0.001, audioCfg.vol);
-    mix.connect(out);
-
-    const delay = ctx.createDelay(1.0);
-    delay.delayTime.value = 0.14;
-    const fb = ctx.createGain(); fb.gain.value = 0.22;
-    const dmix = ctx.createGain(); dmix.gain.value = 0.25;
-    delay.connect(fb).connect(delay);
-    delay.connect(dmix).connect(mix);
-
-    function voice(freq, det = 0) {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t0);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, t0);
-      if (det) osc.detune.setValueAtTime(det, t0);
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(Math.max(0.001, audioCfg.vol * 0.9), t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
-      osc.connect(g).connect(lp);
-      lp.connect(mix);
-      lp.connect(delay);
-      osc.start(t0);
-      osc.stop(t0 + 0.4);
-    }
-
-    voice(660, 0);
-    voice(660, +4);
-    voice(990, 0);
-  } catch {}
-}, { f: 1320, len: 0.14 } ];
-        notes.forEach((n) => {
+      try {
+        ensureCtx(); const ctx = audioCfg.ctx; if (!ctx || !audioCfg.enabled) return;
+        const t0 = ctx.currentTime + (delayMs / 1000);
+        const out = ctx.createGain(); out.gain.value = 1; out.connect(ctx.destination);
+        const mix = ctx.createGain(); mix.gain.value = Math.max(0.001, audioCfg.vol); mix.connect(out);
+        const delay = ctx.createDelay(1.0); delay.delayTime.value = 0.14;
+        const fb = ctx.createGain(); fb.gain.value = 0.22; const dmix = ctx.createGain(); dmix.gain.value = 0.25;
+        delay.connect(fb).connect(delay); delay.connect(dmix).connect(mix);
+        function voice(freq, det = 0) {
           const osc = ctx.createOscillator(); const g = ctx.createGain(); const lp = ctx.createBiquadFilter();
-          lp.type = 'lowpass'; lp.frequency.setValueAtTime(2400, base);
-          osc.type = 'sine'; osc.frequency.setValueAtTime(n.f, base);
-          g.gain.setValueAtTime(0.0001, base);
-          g.gain.exponentialRampToValueAtTime(Math.max(0.001, audioCfg.vol), base + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, base + n.len);
-          osc.connect(g).connect(lp).connect(master);
-          osc.start(base);
-          osc.stop(base + n.len + 0.05);
-        });
+          lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t0);
+          osc.type = 'sine'; osc.frequency.setValueAtTime(freq, t0); if (det) osc.detune.setValueAtTime(det, t0);
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.001, audioCfg.vol * 0.9), t0 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+          osc.connect(g).connect(lp); lp.connect(mix); lp.connect(delay);
+          osc.start(t0); osc.stop(t0 + 0.4);
+        }
+        voice(660, 0); voice(660, +4); voice(990, 0);
       } catch {}
     }
 
-    function playPattern() {
+    function playPattern(){
       if (!audioCfg.enabled) return;
       if (audioCfg.url && audioCfg.resolved) {
-        const d = Math.max(0.2, Math.min(2, audioCfg.dur || 0.35));
-        const base = 0;
-        playOnceAt(base + 0);
-        playOnceAt(base + 1 * d * 1000);
-        playOnceAt(base + 2 * d * 1000);
-        const base2 = base + 3 * d * 1000 + 500;
-        playOnceAt(base2 + 0);
-        playOnceAt(base2 + 1 * d * 1000);
-        playOnceAt(base2 + 2 * d * 1000);
+        const d=Math.max(0.2, Math.min(2, audioCfg.dur||0.35)); const base=0;
+        playOnceAt(base+0); playOnceAt(base+1*d*1000); playOnceAt(base+2*d*1000);
+        const base2=base+3*d*1000+500; playOnceAt(base2+0); playOnceAt(base2+1*d*1000); playOnceAt(base2+2*d*1000);
       } else {
-        chimeAt(0); chimeAt(300); chimeAt(600);
-        const gap = 600 + 500;
-        chimeAt(gap + 0); chimeAt(gap + 300); chimeAt(gap + 600);
+        chimeAt(0); chimeAt(300); chimeAt(600); const gap=600+500; chimeAt(gap+0); chimeAt(gap+300); chimeAt(gap+600);
       }
     }
 
@@ -209,17 +141,10 @@
     let usingSSE=false; let sse;
     function startSSE(){ try { if (!('EventSource' in window)) return false; const url=`/events?channel=${encodeURIComponent(channel)}`; sse=new EventSource(url); sse.addEventListener('open',()=>{ usingSSE=true; dbg('sse open'); }); sse.addEventListener('alert', (e)=>{ try{ const payload=JSON.parse(e.data); lastId = payload.id || payload.timestamp || ''; showBanner(payload); }catch{} }); sse.addEventListener('error', ()=>{ dbg('sse error'); try{sse.close();}catch{} usingSSE=false; poll(); }); return true; } catch { return false; } }
 
-    async function poll(){
-      try { const bust=Date.now(); const url=`/api/poll?channel=${encodeURIComponent(channel)}${lastId?`&since=${encodeURIComponent(lastId)}`:''}&t=${bust}`; const r=await fetch(url,{cache:'no-store'}); if(r.ok){ const j=await r.json(); dbg(`poll ok update=${!!(j&&j.update)}`); if(j&&j.update&&j.payload){ lastId = j.payload.id || j.payload.timestamp || ''; showBanner(j.payload); } } else { dbg(`poll ${r.status}`); } } catch(e){ dbg(`err ${(e&&e.message)||e}`); }
-      setTimeout(poll, 1200);
-    }
+    async function poll(){ try { const bust=Date.now(); const url=`/api/poll?channel=${encodeURIComponent(channel)}${lastId?`&since=${encodeURIComponent(lastId)}`:''}&t=${bust}`; const r=await fetch(url,{cache:'no-store'}); if(r.ok){ const j=await r.json(); dbg(`poll ok update=${!!(j&&j.update)}`); if(j&&j.update&&j.payload){ lastId = j.payload.id || j.payload.timestamp || ''; showBanner(j.payload); } } else { dbg(`poll ${r.status}`); } } catch(e){ dbg(`err ${(e&&e.message)||e}`); } setTimeout(poll, 1200); }
 
     function dbg(msg){ if(qs('debug','0')==='1'){ const d=document.getElementById('dbg'); if(d){ d.style.display='block'; d.textContent=msg; } } }
-    window.addEventListener('DOMContentLoaded', ()=>{
-      const tried=startSSE();
-      setTimeout(()=>{ if(!usingSSE) poll(); }, 700);
-      resolveSoundUrl().then(()=>{ primeAudio(); });
-    });
+    window.addEventListener('DOMContentLoaded', ()=>{ const tried=startSSE(); setTimeout(()=>{ if(!usingSSE) poll(); }, 700); resolveSoundUrl().then(()=>{ primeAudio(); }); });
     window.addEventListener('pointerdown', ()=> primeAudio(false));
   </script>
 </head>
@@ -232,7 +157,7 @@
       <div class="small"></div>
     </div>
   </div>
-  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:rgba(0,0,0,0.92); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(function(){ try{ hideUnlock(); }catch{}; primeAudio(false); })()">Sesi Etkinleştir</button>
+  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:rgba(0,0,0,0.92); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(function(){ try{ const b=document.getElementById('soundUnlock'); if(b) b.style.display='none'; }catch{}; primeAudio(false); })()">Sesi Etkinleştir</button>
   <div id="dbg"></div>
 </body>
 </html>
