@@ -31,7 +31,7 @@ app.use('/static', express.static('public', { extensions: ['html'] }));
 
 // Overlay page (for OBS Browser Source)
 app.get(['/','/overlay'], (req, res) => {
-  res.sendFile(process.cwd() + '/public/overlay.html');
+  res.sendFile(process.cwd() + '/public/overlay2.html');
 });
 
 // Static alert sound for local dev

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Earthquake Alert Overlay</title>
+  <style>
+    :root {
+      --bg: rgba(8, 10, 14, 0.72);
+      --bg2: rgba(8, 10, 14, 0.92);
+      --accent: #ff3b3b;
+      --accent-soft: rgba(255, 59, 59, 0.35);
+      --text: #fff;
+      --muted: rgba(255,255,255,0.72);
+    }
+    html, body {
+      margin: 0; padding: 0; background: transparent; overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, sans-serif;
+    }
+    .banner {
+      position: fixed; left: 50%; top: -220px; transform: translate(-50%, 0);
+      width: min(520px, calc(100vw - 96px));
+      color: var(--text);
+      background: linear-gradient(180deg, var(--bg), var(--bg2));
+      border: 1px solid var(--accent-soft);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+      border-radius: 14px; backdrop-filter: blur(8px) saturate(130%);
+      padding: 18px 22px 22px; display: grid; grid-template-columns: 1fr; gap: 10px; align-items: center; justify-items: center; text-align: center;
+      transition: transform 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
+      opacity: 0;
+    }
+    .banner.show { top: 28px; opacity: 1; }
+    .icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,59,59,0.12); }
+    .icon svg { width: 28px; height: 28px; color: var(--accent); filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+    .content { display: grid; gap: 2px; justify-items: center; }
+    .title { font-size: 22px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.2; }
+    .meta { font-size: 15px; color: var(--muted); line-height: 1.3; }
+    .small { font-size: 12px; color: var(--muted); opacity: 0.85; }
+  </style>
+  <script>
+    function qs(key, def='') { try { const u = new URL(window.location.href); return u.searchParams.get(key) || def; } catch { return def; } }
+    const channel = qs('channel', 'default');
+    let lastId = '';
+
+    const audioState = {
+      ctx: null,
+      enabled: qs('mute', '0') !== '1' && qs('sound', '1') !== '0',
+      volume: Math.max(0, Math.min(1, parseFloat(qs('vol', '1')) || 1)),
+      lastPlay: 0,
+      url: null,
+      buffer: null,
+      htmlDuration: 0,
+      mp3Failed: false,
+    };
+
+    async function ensureAudio() {
+      try {
+        if (!audioState.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          audioState.ctx = new AC();
+        }
+        if (audioState.ctx.state === 'suspended') await audioState.ctx.resume();
+        if (!audioState.url) audioState.url = qs('soundUrl', '/alert.mp3');
+        if (!audioState.buffer) {
+          let ok = false;
+          try { await loadAlertBuffer(audioState.url); ok = true; } catch {}
+          if (!ok) { try { await loadAlertBuffer('/api/alert'); ok = true; } catch {} }
+          if (!ok) audioState.mp3Failed = true;
+        }
+        const elAudio = document.getElementById('alertEl');
+        if (elAudio && !elAudio.src) elAudio.src = audioState.url;
+        const el = document.getElementById('soundUnlock');
+        if (el && audioState.ctx.state === 'running') el.style.display = 'none';
+      } catch {}
+    }
+
+    async function loadAlertBuffer(url) {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('fetch_failed');
+      const arr = await r.arrayBuffer();
+      const buf = await (audioState.ctx || new (window.AudioContext||window.webkitAudioContext)()).decodeAudioData(arr.slice(0));
+      audioState.buffer = buf;
+      audioState.url = url;
+    }
+
+    function playBufferPattern(ctx, base) {
+      const d = (audioState.buffer && audioState.buffer.duration) || 0.4;
+      function playAt(t) {
+        const src = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        src.buffer = audioState.buffer;
+        gain.gain.value = Math.max(0.001, audioState.volume);
+        src.connect(gain).connect(ctx.destination);
+        src.start(t);
+      }
+      playAt(base + 0*d);
+      playAt(base + 1*d);
+      playAt(base + 2*d);
+      const base2 = base + 3*d + 0.5;
+      playAt(base2 + 0*d);
+      playAt(base2 + 1*d);
+      playAt(base2 + 2*d);
+      audioState.lastPlay = base2 + 3*d;
+    }
+
+    function playHtmlAudioPattern(baseSec) {
+      const base = baseSec || performance.now()/1000;
+      const src = audioState.url || '/alert.mp3';
+      const d = audioState.htmlDuration || (audioState.buffer && audioState.buffer.duration) || 0.4;
+      function playAt(delaySec) {
+        const a = new Audio(src);
+        a.preload = 'auto'; a.volume = Math.max(0.001, audioState.volume);
+        const ms = Math.max(0, (base + delaySec - performance.now()/1000) * 1000);
+        setTimeout(() => { a.play().catch(()=>{}); }, ms);
+      }
+      playAt(0); playAt(1*d); playAt(2*d);
+      const base2 = 3*d + 0.5;
+      playAt(base2 + 0*d); playAt(base2 + 1*d); playAt(base2 + 2*d);
+      audioState.lastPlay = (performance.now()/1000) + base2 + 3*d;
+    }
+
+    async function playWarningSound() {
+      if (!audioState.enabled) return;
+      try {
+        await ensureAudio();
+        const ctx = audioState.ctx;
+        if (!ctx || ctx.state !== 'running') {
+          const btn = document.getElementById('soundUnlock');
+          if (btn) btn.style.display = 'inline-flex';
+          // still try HTMLAudio which may play in OBS
+          if (!audioState.mp3Failed) try { playHtmlAudioPattern(); } catch {}
+          return;
+        }
+        const now = Math.max(ctx.currentTime, audioState.lastPlay + 0.02);
+        if (audioState.buffer) {
+          playBufferPattern(ctx, now);
+        } else if (!audioState.mp3Failed) {
+          try { playHtmlAudioPattern(); } catch {}
+        }
+        // no tone fallback here unless mp3 truly failed; banner still shows even without sound
+      } catch {}
+    }
+
+    function showBanner(payload) {
+      const { displayTitle, displayMeta, title, message, location, timestamp, accent } = payload || {};
+      const el = document.getElementById('banner');
+      if (accent) document.documentElement.style.setProperty('--accent', accent);
+      el.querySelector('.title').textContent = displayTitle || title || 'Earthquake Early Warning';
+      const meta = displayMeta || [message, location].filter(Boolean).join(' | ');
+      el.querySelector('.meta').textContent = meta || '';
+      try {
+        const d = timestamp ? new Date(timestamp) : new Date();
+        const tr = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+        el.querySelector('.small').textContent = tr;
+      } catch { el.querySelector('.small').textContent = ''; }
+      playWarningSound();
+      el.classList.add('show');
+      clearTimeout(window.__hideTimer);
+      window.__hideTimer = setTimeout(() => el.classList.remove('show'), 12000);
+    }
+
+    async function poll() {
+      try {
+        const bust = Date.now();
+        const url = `/api/poll?channel=${encodeURIComponent(channel)}${lastId ? `&since=${encodeURIComponent(lastId)}` : ''}&t=${bust}`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.update && j.payload) {
+            lastId = j.payload.id || j.payload.timestamp || '';
+            showBanner(j.payload);
+          }
+        }
+      } catch {}
+      setTimeout(poll, 1200);
+    }
+    window.addEventListener('DOMContentLoaded', () => { poll(); ensureAudio(); });
+    window.addEventListener('pointerdown', ensureAudio);
+    window.addEventListener('keydown', ensureAudio);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureAudio(); });
+  </script>
+</head>
+<body>
+  <div id="banner" class="banner" role="status" aria-live="polite">
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 3L1 21h22L12 3z" fill="currentColor" opacity="0.18" />
+        <path d="M12 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="17" r="1.6" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="content">
+      <div class="title">Early Warning</div>
+      <div class="meta">Earthquake notification</div>
+      <div class="small"></div>
+    </div>
+  </div>
+  <audio id="alertEl" preload="auto" style="display:none" onloadedmetadata="audioState.htmlDuration=this.duration"></audio>
+  <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:var(--bg2); color:var(--text); border:1px solid var(--accent-soft); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(async ()=>{audioState.enabled=true; await ensureAudio(); const a=document.getElementById('alertEl'); if(a){try{await a.play();}catch{}}})()">Enable sound</button>
+</body>
+</html>
