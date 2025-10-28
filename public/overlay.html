@@ -53,13 +53,58 @@
       try {
         const provided = qs('soundUrl','');
         const candidates = [];
-        if (provided) candidates.push(provided);
+
+        // Normalize provided soundUrl: support absolute, protocol URLs, and relative values
+        if (provided) {
+          const p = provided.trim();
+          candidates.push(p);
+          if (!/^https?:\/\//i.test(p)) {
+            if (p[0] !== '/') candidates.push('/' + p);
+          }
+        }
+
+        // Try common absolute paths first (Vercel/static hosting)
         candidates.push('/alert.mp3');
-        candidates.push('/public/alert.mp3');
+
+        // Also try relative paths for local-file usage (e.g., OBS "Local File")
+        candidates.push('alert.mp3');
+        candidates.push('./alert.mp3');
+
+        // Dev server path (Express static under /static)
         candidates.push('/static/alert.mp3');
-        for (const u of candidates) {
-          try { const h = await fetch(u, { method: 'HEAD', cache: 'no-store' }); if (h.ok) { audioCfg.url = u; audioCfg.resolved = true; return; } } catch {}
-          try { const g = await fetch(u, { method: 'GET', cache: 'no-store' }); if (g.ok) { audioCfg.url = u; audioCfg.resolved = true; return; } } catch {}
+
+        // Legacy/incorrect but harmless to try on some hosts
+        candidates.push('/public/alert.mp3');
+
+        // Deduplicate while preserving order
+        const seen = new Set();
+        const unique = candidates.filter(u => { if (seen.has(u)) return false; seen.add(u); return true; });
+
+        async function canFetch(u) {
+          try { const h = await fetch(u, { method: 'HEAD', cache: 'no-store' }); if (h.ok) return true; } catch {}
+          try { const g = await fetch(u, { method: 'GET', cache: 'no-store' }); if (g.ok) return true; } catch {}
+          return false;
+        }
+
+        function canLoadWithAudio(u, timeoutMs = 2000) {
+          return new Promise(resolve => {
+            try {
+              const a = new Audio();
+              let done = false; const to = setTimeout(() => { if (!done) { done = true; resolve(false); } }, Math.max(500, timeoutMs));
+              a.addEventListener('loadedmetadata', () => { if (!done) { done = true; clearTimeout(to); resolve(true); } }, { once: true });
+              a.addEventListener('canplaythrough', () => { if (!done) { done = true; clearTimeout(to); resolve(true); } }, { once: true });
+              a.addEventListener('error', () => { if (!done) { done = true; clearTimeout(to); resolve(false); } }, { once: true });
+              a.src = u; a.preload = 'auto'; a.load();
+            } catch { resolve(false); }
+          });
+        }
+
+        for (const u of unique) {
+          let ok = false;
+          // Prefer fetch for network contexts; fall back to HTMLAudio detection
+          if (location.protocol !== 'file:') ok = await canFetch(u);
+          if (!ok) ok = await canLoadWithAudio(u);
+          if (ok) { audioCfg.url = u; audioCfg.resolved = true; return; }
         }
       } catch {}
     }
