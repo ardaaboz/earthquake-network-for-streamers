@@ -164,14 +164,21 @@
         const bust = Date.now();
         const url = `/api/poll?channel=${encodeURIComponent(channel)}${lastId ? `&since=${encodeURIComponent(lastId)}` : ''}&t=${bust}`;
         const r = await fetch(url, { cache: 'no-store' });
+        const dbg = document.getElementById('dbg');
         if (r.ok) {
           const j = await r.json();
+          if (dbg && qs('debug','0')==='1') dbg.textContent = `ok update=${!!(j&&j.update)} ch=${channel} t=${new Date().toLocaleTimeString()}`;
           if (j && j.update && j.payload) {
             lastId = j.payload.id || j.payload.timestamp || '';
             showBanner(j.payload);
           }
+        } else {
+          if (dbg && qs('debug','0')==='1') dbg.textContent = `poll ${r.status}`;
         }
-      } catch {}
+      } catch (e) {
+        const dbg = document.getElementById('dbg');
+        if (dbg && qs('debug','0')==='1') dbg.textContent = `err ${(e&&e.message)||e}`;
+      }
       setTimeout(poll, 1200);
     }
     window.addEventListener('DOMContentLoaded', () => { poll(); ensureAudio(); });
@@ -197,5 +204,7 @@
   </div>
   <audio id="alertEl" preload="auto" style="display:none" onloadedmetadata="audioState.htmlDuration=this.duration"></audio>
   <button id="soundUnlock" style="position:fixed; top:10px; right:10px; display:none; padding:6px 10px; background:var(--bg2); color:var(--text); border:1px solid var(--accent-soft); border-radius:8px; cursor:pointer; font:600 12px system-ui" onclick="(async ()=>{audioState.enabled=true; await ensureAudio(); const a=document.getElementById('alertEl'); if(a){try{await a.play();}catch{}}})()">Enable sound</button>
+  <div id="dbg" style="position:fixed; right:10px; bottom:10px; font:12px system-ui; color:#fff; background:rgba(0,0,0,0.45); padding:6px 8px; border-radius:6px; display: none"></div>
+  <script>if(qs('debug','0')==='1'){ const x=document.getElementById('dbg'); if(x){x.style.display='block'; x.textContent='debug on';}}</script>
 </body>
 </html>
